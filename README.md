@@ -1,2 +1,5 @@
 # KianaKouhai
-A very much W.I.P bot for my epic streamer brother DrunklockHolmes. 
+Kiana Kouhai is a work in progress bot for the Twitch streamer DrunlockHolmes.
+
+#Features
+- An economy based module for gaining points that the bot keeps track of.
