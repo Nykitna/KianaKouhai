@@ -1,211 +1,177 @@
-import json
-import time
 import random
+import time
+import KianaExceptions as ke
 
 from twitchio.ext import commands
-from twitchio.ext.commands.bot import Bot
+from KianaFileIO import KianaFileIO
 
 @commands.cog()
 class Economy:
-	def __init__(self, bot : Bot):
-		self.bot = bot
-		self.data = self.start()
+	def __init__(self, bot: commands.Bot):
+		self.bot = bot  # Required for class initiation
+		self.file = KianaFileIO("data/economy.json")
+		self.data = self.file.json_load()
 		self.currency = "GAM3R CoinZ"
-
-	def start(self):
-		with open("data/economy.json", "r") as f:
-			return json.load(f)
-
-	def save(self):
-		with open("data/economy.json", "w") as f:
-			json.dump(self.data, f, indent = 4)
-	
-	def get(self, user, value):
-		return self.data[user].get(value)
-
-	def add(self, user):
-		self.data[user] = {"wallet": 2000, "bank": 0}
-
-	def update(self, user, wallet = None, bank = None):
-		if bank == None:
-			self.data[user].update({"wallet": wallet})
-		elif wallet == None:
-			self.data[user].update({"bank": bank})
-		else:
-			self.data[user].update({"wallet": wallet})
-			self.data[user].update({"bank": bank})
-
-	async def verify(self, target):
-		chatters = await self.bot.get_chatters("drunklockholmes")
-		user = chatters[1].count(target)
-		if user == 1:
-			return True
-		else:
-			return False
 	
 	@classmethod
-	def uformat(cls, string):
+	def sformat(cls, string):
 		if string.startswith("@"):
 			string = string[1:]
-			string = string.lower()
-			return string
+		return string.lower()
 	
-	@commands.command(name = "balance", aliases = ["Balance"])
+	def add_user(self, user):
+		self.data[user] = {"wallet": 2000, "bank": 0}
+		self.file.json_save(self.data)
+	
+	def get_v(self, user, key):
+		return self.data[user].get(key)
+	
+	def set_v(self, user, key, value):
+		self.data[user].update({key: value})
+		self.file.json_save(self.data)
+	
+	async def verify(self, user, channel = "drunklockholmes"):
+		self.sformat(user)
+		chatters = await self.bot.get_chatters(channel)
+		exp = chatters[1].count(user)
+		if exp == 1:
+			return True
+		elif exp == 0:
+			raise ke.UserNotFound()
+	
+	@commands.command(name = "balance", aliases = ["Balance", "Bal", "bal"])
 	async def balance(self, ctx):
 		user = ctx.message.author.name
 		if user not in self.data:
-			self.add(user)
-			self.save()
-			pass
-		bank_balance = self.get(user, "bank")
-		wallet_balance = self.get(user, "wallet")
-		await ctx.send(f"You have {bank_balance} in your bank and {wallet_balance} in your wallet @{user}!")
+			self.add_user()
+		bankbal = self.get_v(user, "bank")
+		walletbal = self.get_v(user, "wallet")
+		await ctx.send(f"{user.capitalize()} has {walletbal} in their wallet and {bankbal} in their bank.")
 	
 	@commands.command(name = "deposit", aliases = ["Deposit"])
 	async def deposit(self, ctx, amount):
-		user = ctx.message.author.name
-		if user not in self.data:
-			self.add(user)
-			self.save()
-			pass
-		try:
+		if amount.isnumeric() is True:
 			amount = int(amount)
-			amount = abs(amount)
+			user = ctx.message.author.name
+			if user not in self.data:
+				self.add_user(user)
 			if amount != 0:
-				current_wallet = self.get(user, "wallet")
-				if current_wallet >= amount:
-					new_bank =	self.get(user, "bank")
-					new_wallet = self.get(user, "wallet")
-					self.update(user, bank = (new_bank + amount))
-					self.update(user, wallet = (new_wallet - amount))
-					self.save()
-					await ctx.send(f"{amount} transfered to your bank!")
+				bank = self.get_v(user, "bank")
+				wallet = self.get_v(user, "wallet")
+				if wallet >= amount:
+					self.set_v(user, "wallet", (wallet - amount))
+					self.set_v(user, "bank", (bank + amount))
+					await ctx.send(f"{amount} transferred out of your bank!")
 				else:
 					await ctx.send("You don't have that much in your wallet!")
 			elif amount == 0:
-				await ctx.send("You can't deposit zero silly!")
-		except Exception:
+				await ctx.send("Depositing zero...Pointless.")
+		else:
 			await ctx.send("Error! Not a number! Did the operator enjoy this witticism?")
 	
 	@commands.command(name = "withdrawal", aliases = ["Withdrawal"])
 	async def withdrawal(self, ctx, amount):
-		user = ctx.message.author.name
-		if user not in self.data:
-			self.add(user)
-			self.save()
-			pass
-		try:
+		if amount.isnumeric() is True:
 			amount = int(amount)
-			amount = abs(amount)
+			user = ctx.message.author.name
+			if user not in self.data:
+				self.add_user(user)
 			if amount != 0:
-				current_bank = self.get(user, "bank")
-				if current_bank >= amount:
-					new_wallet = self.get(user, "wallet")
-					new_bank = self.get(user, "bank")
-					self.update(user, wallet_val = (new_wallet + amount))
-					self.update(user, bank_val = (new_bank - amount))
-					self.save()
-					await ctx.send(f"{amount} transfered out of your bank!")
+				bank = self.get_v(user, "bank")
+				wallet = self.get_v(user, "wallet")
+				if bank >= amount:
+					self.set_v(user, "wallet", (wallet + amount))
+					self.set_v(user, "bank", (bank - amount))
+					await ctx.send(f"{amount} transferred into your wallet!")
 				else:
 					await ctx.send("You don't have that much in your bank!")
 			elif amount == 0:
-				await ctx.send("You can't deposit zero silly!")
-		except Exception:
+				await ctx.send("Withdrawing zero...Pointless.")
+		else:
 			await ctx.send("Error! Not a number! Did the operator enjoy this witticism?")
-		
+	
 	@commands.command(name = "give", aliases = ["Give"])
-	async def give(self, ctx, receiver, amount):
-		sender = ctx.message.author.name
-		receiver = self.uformat(receiver)
-		r_exists = await self.verify(target = receiver)
-		if r_exists == True:
-			if receiver not in self.data:
-				self.add(receiver)
-			else:
-				try:
-					amount = int(amount)
-					amount = abs(amount)
-					if amount > 0:
-						senderbal = self.get(sender, "wallet")
-						if senderbal >= amount:
-							receiverbal = self.get(receiver, "wallet")
-							self.update(sender, wallet = (senderbal - amount))
-							self.update(receiver, wallet = (receiverbal + amount))
-							self.save()
-							await ctx.send(f"{sender} gave {receiver} {amount} {self.currency}")
-					elif amount < 0:
-						await ctx.send("Don't be mean and try to scam :(")
-					else:
-						await ctx.send("Wow, trying to give people nothing...what a shame.")
-				except Exception:
-					if isinstance(Exception, ValueError):
-						await ctx.send("Error! Not a number! Did the operator enjoy this witticism?")
-
-	@commands.command(name = "rob", aliases = ["Rob"])
-	async def rob(self, ctx, victim):
+	async def give(self, ctx, amount, target):
 		user = ctx.message.author.name
 		if user not in self.data:
-			self.add(user)
-			self.save()
-			pass
-		victim = self.uformat(victim)
-		v_exists = await self.verify(victim)
-		if v_exists is True:
-			if victim not in self.data:
-				self.add(victim)
-				self.save()
-				pass
+			self.add_user(user)
+		if self.verify(target) is True:
+			target = self.sformat(target)
+			if target not in self.data:
+				self.add_user(target)
+		else:
+			await ctx.send("User defined doesn't exist")
+		if amount.isnumeric() is True:
+			amount = int(amount)
+			if amount != 0:
+				walletu = self.get_v(user, "wallet")
+				wallett = self.get_v(target, "wallet")
+				if walletu >= amount:
+					self.set_v(user, "wallet", (walletu - amount))
+					self.set_v(target, "wallet", (wallett + amount))
+					await ctx.send(f"{user} gave {target} {amount} {self.currency}")
+			elif amount == 0:
+				await ctx.send("Giving zero...that's not nice.")
+		else:
+			await ctx.send("Error! Not a number! Did the operator enjoy this witticism?")
+	
+	@commands.command(name = "rob", aliases = ["Rob"])
+	async def rob(self, ctx, target):
+		user = ctx.message.author.name
+		if user not in self.data:
+			self.add_user(user)
+		if self.verify(target) is True:
+			target = self.sformat(target)
+			if target not in self.data:
+				self.add_user(target)
 		random.seed(time.time())
-		if victim != user:
+		if target != user:
 			chances = random.randint(0, 300)
 			if chances >= 275:
-				vwallet = self.get(victim, "wallet")
-				uwallet = self.get(user, "wallet")
-				stolen = random.randint(0, vwallet)
-				self.update(victim, wallet = (vwallet - stolen))
-				self.update(user, wallet = (uwallet + stolen))
-				self.save()
-				await ctx.send(f"{user} robbed {victim} of {stolen} {self.currency}")
+				walletu = self.get_v(user, "wallet")
+				wallett = self.get_v(target, "wallet")
+				amount = random.randint(1, wallett)
+				self.set_v(user, "wallet", (walletu + amount))
+				self.set_v(user, "wallet", (wallett - amount))
+				await ctx.send(f"{user} robbed {target} of {amount} {self.currency}")
 			elif chances >= 100:
-				vwallet = self.get(victim, "wallet")
-				uwallet = self.get(user, "wallet")
-				stolen = random.randint(0, 100)
-				self.update(victim, wallet = (vwallet - stolen))
-				self.update(user, wallet = (uwallet + stolen))
-				self.save()
-				await ctx.send(f"{user} robbed {victim} of {stolen} {self.currency}")
-			elif chances < 100:
-				await ctx.send(f"{victim} caught you and you gained nothing but a black eye.")
+				walletu = self.get_v(user, "wallet")
+				wallett = self.get_v(target, "wallet")
+				amount = random.randint(1, 100)
+				if wallett > amount:
+					self.set_v(user, "wallet", (walletu + amount))
+					self.set_v(user, "wallet", (wallett - amount))
+					await ctx.send(f"{user} robbed {target} of {amount} {self.currency}")
+				elif wallett < amount:
+					amount = random.randint(0, wallett)
+					self.set_v(user, "wallet", (walletu + amount))
+					self.set_v(user, "wallet", (wallett - amount))
+					await ctx.send(f"{user} robbed {target} of {amount} {self.currency}")
+				else:
+					await ctx.send(f"{target} has no money to steal.")
+			else:
+				await ctx.send(f"{target} caught you. All you got was a black eye.")
 		else:
 			await ctx.send("You cannot rob yourself!")
 
 	@commands.command(name = "gamble", aliases = ["Gamble"])
 	async def gamble(self, ctx, amount):
-		user = ctx.message.author.name
-		if user not in self.data:
-			self.add(user)
-			self.save()
-			pass
-		try:
+		if amount.isnumeric() is True:
+			user = ctx.message.author.name
 			amount = int(amount)
-			amount = abs(amount)
-			if amount > 0 or amount < 0:
-				balance = self.get(user, "wallet")
-				if balance >= amount:
-					random.seed(time.time())
-					chances = random.randint(0,1)
-					if chances == 1:
-						self.update(user, wallet = (balance + (amount * 2)))
-						self.save()
-						await ctx.send(f"{user} won {amount * 2} {self.currency}!")
-					else:
-						self.update(user, wallet = (balance - amount))
-						self.save()
-						await ctx.send(f"{user} lost {amount} {self.currency}!")
+			if user not in self.data:
+				self.add_user(user)
+			balance = self.get_v(user, "wallet")
+			if balance >= amount:
+				random.seed(time.time())
+				chances = random.randint(0,1)
+				if chances == 1:
+					self.set_v(user, "wallet", balance + (amount * 2))
+					await ctx.send(f"{user} won {amount * 2} {self.currency}!")
 				else:
-					ctx.send("You cant bet more than you have!")
-			elif amount == 0:
-				ctx.send("You can't bet nothing")
-		except Exception:
-			if isinstance(Exception, ValueError):
-				await ctx.send("Error! Not a number! Did the operator enjoy this witticism?")
+					self.set_v(user, "wallet", balance - amount)
+					await ctx.send(f"{user} lost {amount} {self.currency}!")
+			else:
+				await ctx.send("You can't bet more than you have!")
+		else:
+			await ctx.send("Error! Not a number! Did the operator enjoy this witticism?")
