@@ -1,8 +1,5 @@
-import sys
-
-from Economy import Economy
 from twitchio.ext import commands
-
+from Economy import Economy
 
 Kiana = commands.Bot(
 	irc_token = "<IRC_TOKEN>",
@@ -21,7 +18,5 @@ async def ping(ctx):
 	await ctx.send("Pong!")
 
 if __name__ == "__main__":
-	Econ = Economy(bot = Kiana)
-	Econ.start()
-	Kiana.add_cog(Econ)
+	Kiana.add_cog(Economy(Kiana))
 	Kiana.run()
