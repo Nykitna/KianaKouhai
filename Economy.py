@@ -13,7 +13,7 @@ class Economy(commands.Cog):
 		self.bot = bot
 		self.d = Database("library/data/wealth.json")
 	
-	@commands.command(name = "bal", aliases = ["Bal"])
+	@commands.command(name = "bal", aliases = ["Bal", "balance", "Balance"])
 	async def bal(self, ctx : commands.Context):
 		user_id = str(ctx.author.id)
 		if user_id not in self.d.filedata:
