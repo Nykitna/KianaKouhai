@@ -21,3 +21,7 @@ class Checks:
 				return userdata["bank"] >= value
 		else:
 			raise TypeError
+			
+	@staticmethod
+	def NoNegative(value : int):
+		return abs(value)
