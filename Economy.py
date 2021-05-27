@@ -1,177 +1,206 @@
+import difflib
 import random
 import time
-import KianaExceptions as ke
 
+import twitchio
 from twitchio.ext import commands
-from KianaFileIO import KianaFileIO
+from library.Database import Database
+from library.Errors import *
+from Utility import Checks
 
-@commands.cog()
-class Economy:
-	def __init__(self, bot: commands.Bot):
-		self.bot = bot  # Required for class initiation
-		self.file = KianaFileIO("data/economy.json")
-		self.data = self.file.json_load()
-		self.currency = "GAM3R CoinZ"
+class Economy(commands.Cog):
+	def __init__(self, bot : commands.Bot):
+		self.bot = bot
+		self.d = Database("library/data/wealth.json")
 	
-	@classmethod
-	def sformat(cls, string):
-		if string.startswith("@"):
-			string = string[1:]
-		return string.lower()
+	@commands.command(name = "bal", aliases = ["Bal"])
+	async def bal(self, ctx : commands.Context):
+		user_id = str(ctx.author.id)
+		if user_id not in self.d.filedata:
+			self.d.add(user_id)
+			pass
+		wallet = self.d.filedata[user_id].get("wallet")
+		bank = self.d.filedata[user_id].get("bank")
+		await ctx.send(f"{ctx.author.name}, you have {wallet} credits in your wallet and {bank} credits in your bank.")
 	
-	def add_user(self, user):
-		self.data[user] = {"wallet": 2000, "bank": 0}
-		self.file.json_save(self.data)
-	
-	def get_v(self, user, key):
-		return self.data[user].get(key)
-	
-	def set_v(self, user, key, value):
-		self.data[user].update({key: value})
-		self.file.json_save(self.data)
-	
-	async def verify(self, user, channel = "drunklockholmes"):
-		self.sformat(user)
-		chatters = await self.bot.get_chatters(channel)
-		exp = chatters[1].count(user)
-		if exp == 1:
-			return True
-		elif exp == 0:
-			raise ke.UserNotFound()
-	
-	@commands.command(name = "balance", aliases = ["Balance", "Bal", "bal"])
-	async def balance(self, ctx):
-		user = ctx.message.author.name
-		if user not in self.data:
-			self.add_user()
-		bankbal = self.get_v(user, "bank")
-		walletbal = self.get_v(user, "wallet")
-		await ctx.send(f"{user.capitalize()} has {walletbal} in their wallet and {bankbal} in their bank.")
-	
-	@commands.command(name = "deposit", aliases = ["Deposit"])
-	async def deposit(self, ctx, amount):
-		if amount.isnumeric() is True:
+	@commands.command(name = "deposit")
+	async def deposit(self, ctx : commands.Context, amount):
+		user_id = str(ctx.author.id)
+		if user_id not in self.d.filedata:
+			self.d.add(user_id)
+			pass
+		try:
 			amount = int(amount)
-			user = ctx.message.author.name
-			if user not in self.data:
-				self.add_user(user)
-			if amount != 0:
-				bank = self.get_v(user, "bank")
-				wallet = self.get_v(user, "wallet")
-				if wallet >= amount:
-					self.set_v(user, "wallet", (wallet - amount))
-					self.set_v(user, "bank", (bank + amount))
-					await ctx.send(f"{amount} transferred out of your bank!")
+			if self.d.filedata[user_id].get("wallet") >= amount:
+				wallet = self.d.filedata[user_id].get("wallet")
+				bank = self.d.filedata[user_id].get("bank")
+				self.d.filedata[user_id].update({"wallet": (wallet - amount)})
+				self.d.filedata[user_id].update({"bank": (bank + amount)})
+				await ctx.send(f"Successfully moved {amount} to your bank.")
+				self.d.save()
+			else:
+				await ctx.send("You do not have enough credits in your wallet.")
+		except Exception as E:
+			if isinstance(E, ValueError):
+				if amount == "all":
+					wallet = self.d.filedata[user_id].get("wallet")
+					bank = self.d.filedata[user_id].get("bank")
+					self.d.filedata[user_id].update({"wallet" : (wallet - wallet)})
+					self.d.filedata[user_id].update({"bank": (bank + wallet)})
+					await ctx.send(f"Successfully moved {wallet} credits to your bank.")
+					self.d.save()
+	
+	@commands.command(name = "withdrawal", aliases = ["withdrawl", "withdraw"])
+	async def withdrawal(self, ctx: commands.Context, amount):
+		user_id = str(ctx.author.id)
+		if user_id not in self.d.filedata:
+			self.d.add(user_id)
+			pass
+		try:
+			amount = int(amount)
+			if self.d.filedata[user_id].get("bank") >= amount:
+				wallet = self.d.filedata[user_id].get("wallet")
+				bank = self.d.filedata[user_id].get("bank")
+				self.d.filedata[user_id].update({"wallet": (wallet + amount)})
+				self.d.filedata[user_id].update({"bank": (bank - amount)})
+				await ctx.send(f"Successfully moved {amount} to your wallet.")
+				self.d.save()
+			else:
+				await ctx.send("You do not have enough credits in your bank.")
+		except Exception as E:
+			if isinstance(E, ValueError):
+				if amount == "all":
+					wallet = self.d.filedata[user_id].get("wallet")
+					bank = self.d.filedata[user_id].get("bank")
+					self.d.filedata[user_id].update({"bank": (bank - bank)})
+					self.d.filedata[user_id].update({"wallet": (wallet + bank)})
+					await ctx.send(f"Successfully moved {bank} credits to your wallet.")
+					self.d.save()
 				else:
-					await ctx.send("You don't have that much in your wallet!")
-			elif amount == 0:
-				await ctx.send("Depositing zero...Pointless.")
-		else:
-			await ctx.send("Error! Not a number! Did the operator enjoy this witticism?")
-	
-	@commands.command(name = "withdrawal", aliases = ["Withdrawal"])
-	async def withdrawal(self, ctx, amount):
-		if amount.isnumeric() is True:
+					await ctx.send("Invalid command argument.")
+
+	@commands.command(name = "gamble", aliases = ["Gamble", "Bet", "bet", 'slots', "Slots"])
+	async def gamble(self, ctx : commands.Context, amount):
+		user_id = str(ctx.author.id)
+		if user_id not in self.d.filedata is True:
+			self.d.add(user_id)
+			pass
+		try:
 			amount = int(amount)
-			user = ctx.message.author.name
-			if user not in self.data:
-				self.add_user(user)
-			if amount != 0:
-				bank = self.get_v(user, "bank")
-				wallet = self.get_v(user, "wallet")
-				if bank >= amount:
-					self.set_v(user, "wallet", (wallet + amount))
-					self.set_v(user, "bank", (bank - amount))
-					await ctx.send(f"{amount} transferred into your wallet!")
-				else:
-					await ctx.send("You don't have that much in your bank!")
-			elif amount == 0:
-				await ctx.send("Withdrawing zero...Pointless.")
-		else:
-			await ctx.send("Error! Not a number! Did the operator enjoy this witticism?")
-	
-	@commands.command(name = "give", aliases = ["Give"])
-	async def give(self, ctx, amount, target):
-		user = ctx.message.author.name
-		if user not in self.data:
-			self.add_user(user)
-		if self.verify(target) is True:
-			target = self.sformat(target)
-			if target not in self.data:
-				self.add_user(target)
-		else:
-			await ctx.send("User defined doesn't exist")
-		if amount.isnumeric() is True:
-			amount = int(amount)
-			if amount != 0:
-				walletu = self.get_v(user, "wallet")
-				wallett = self.get_v(target, "wallet")
-				if walletu >= amount:
-					self.set_v(user, "wallet", (walletu - amount))
-					self.set_v(target, "wallet", (wallett + amount))
-					await ctx.send(f"{user} gave {target} {amount} {self.currency}")
-			elif amount == 0:
-				await ctx.send("Giving zero...that's not nice.")
-		else:
-			await ctx.send("Error! Not a number! Did the operator enjoy this witticism?")
-	
-	@commands.command(name = "rob", aliases = ["Rob"])
-	async def rob(self, ctx, target):
-		user = ctx.message.author.name
-		if user not in self.data:
-			self.add_user(user)
-		if self.verify(target) is True:
-			target = self.sformat(target)
-			if target not in self.data:
-				self.add_user(target)
+			rint = random.randint(0,1)
+			if self.d.filedata[user_id].get("wallet") >= amount:
+				if rint == 1:
+					wallet = self.d.filedata[user_id].get("wallet")
+					wallet += amount * 2
+					self.d.filedata[user_id].update({"wallet": wallet})
+					await ctx.send(f"You won {amount * 2} credits!")
+					self.d.save()
+				elif rint == 0:
+					wallet = self.d.filedata[user_id].get("wallet")
+					wallet -= amount
+					self.d.filedata[user_id].update({"wallet": wallet})
+					await ctx.send(f"You lost {amount} credits. Better luck next time.")
+					self.d.save()
+			else:
+				await ctx.send("You do not have enough credits in your wallet.")
+		except Exception as E:
+			if isinstance(E, ValueError):
+				if amount == "all":
+					rint = random.randint(0, 1)
+					if rint == 1:
+						wallet = self.d.filedata[user_id].get("wallet")
+						wallet = wallet * 2
+						self.d.filedata[user_id].update({"wallet": wallet})
+						await ctx.send(f"You won {wallet * 2} credits!")
+						self.d.save()
+					elif rint == 0:
+						self.d.filedata[user_id].update({"wallet": 0})
+						await ctx.send(f"You lost {amount} credits. Better luck next time.")
+						self.d.save()
+			
+	@commands.command(name = "rob", aliases = ["steal", "Rob", "Steal"])
+	async def rob(self, ctx : commands.Context, member : twitchio.User):
+		user_id = str(ctx.author.id)
+		vict_id = str(member.id)
+		if user_id not in self.d.filedata:
+			self.d.add(user_id)
+			self.d.save()
+			pass
+		if vict_id not in self.d.filedata:
+			self.d.add(vict_id)
+			self.d.save()
+			pass
+		userwallet = self.d.filedata[user_id].get("wallet")
+		victwallet = self.d.filedata[vict_id].get("wallet")
 		random.seed(time.time())
-		if target != user:
-			chances = random.randint(0, 300)
-			if chances >= 275:
-				walletu = self.get_v(user, "wallet")
-				wallett = self.get_v(target, "wallet")
-				amount = random.randint(1, wallett)
-				self.set_v(user, "wallet", (walletu + amount))
-				self.set_v(user, "wallet", (wallett - amount))
-				await ctx.send(f"{user} robbed {target} of {amount} {self.currency}")
-			elif chances >= 100:
-				walletu = self.get_v(user, "wallet")
-				wallett = self.get_v(target, "wallet")
-				amount = random.randint(1, 100)
-				if wallett > amount:
-					self.set_v(user, "wallet", (walletu + amount))
-					self.set_v(user, "wallet", (wallett - amount))
-					await ctx.send(f"{user} robbed {target} of {amount} {self.currency}")
-				elif wallett < amount:
-					amount = random.randint(0, wallett)
-					self.set_v(user, "wallet", (walletu + amount))
-					self.set_v(user, "wallet", (wallett - amount))
-					await ctx.send(f"{user} robbed {target} of {amount} {self.currency}")
-				else:
-					await ctx.send(f"{target} has no money to steal.")
+		chances = random.randint(1,3)
+		if chances == 3:
+			stolen = random.randint(0, victwallet)
+			userwallet += stolen
+			victwallet -= stolen
+			self.d.filedata[user_id].update({"wallet": userwallet})
+			self.d.filedata[vict_id].update({"wallet": victwallet})
+			await ctx.send(f"{ctx.author.name} robbed {stolen} credits from {member.name}.")
+			self.d.save()
+		elif chances == 2:
+			stolen = random.randint(0, 100)
+			if Checks.WalletCheck(vict_id, stolen) is True:
+				userwallet += stolen
+				victwallet -= stolen
+				self.d.filedata[user_id].update({"wallet": userwallet})
+				self.d.filedata[vict_id].update({"wallet": victwallet})
+				await ctx.send(f"{ctx.author.name} robbed {stolen} credits from {member.name}.")
+				self.d.save()
 			else:
-				await ctx.send(f"{target} caught you. All you got was a black eye.")
+				stolen = random.randint(0, victwallet)
+				userwallet += stolen
+				victwallet -= stolen
+				self.d.filedata[user_id].update({"wallet": userwallet})
+				self.d.filedata[vict_id].update({"wallet": victwallet})
+				await ctx.send(f"{ctx.author.name} robbed {stolen} credits from {member.name}.")
+				self.d.save()
 		else:
-			await ctx.send("You cannot rob yourself!")
-
-	@commands.command(name = "gamble", aliases = ["Gamble"])
-	async def gamble(self, ctx, amount):
-		if amount.isnumeric() is True:
-			user = ctx.message.author.name
+			await ctx.send(f"{ctx.author.name} was caught!")
+	
+	@commands.command(name = "give")
+	async def give(self, ctx, amount, member : twitchio.User):
+		uid = str(ctx.author.id)
+		rid = str(member.id)
+		try:
 			amount = int(amount)
-			if user not in self.data:
-				self.add_user(user)
-			balance = self.get_v(user, "wallet")
-			if balance >= amount:
-				random.seed(time.time())
-				chances = random.randint(0,1)
-				if chances == 1:
-					self.set_v(user, "wallet", balance + (amount * 2))
-					await ctx.send(f"{user} won {amount * 2} {self.currency}!")
-				else:
-					self.set_v(user, "wallet", balance - amount)
-					await ctx.send(f"{user} lost {amount} {self.currency}!")
-			else:
-				await ctx.send("You can't bet more than you have!")
+			print(rid)
+			if uid not in self.d.filedata:
+				self.d.add(uid)
+				self.d.save()
+			uwallet = self.d.filedata[uid].get("wallet")
+			rwallet = self.d.filedata[rid].get("wallet")
+			self.d.filedata[uid].update({"wallet": uwallet - amount})
+			self.d.filedata[rid].update({"wallet": rwallet + amount})
+			await ctx.send(f"{ctx.author.name} gave {member.name} {amount} credits")
+			self.d.save()
+		except Exception as E:
+			if isinstance(E, ValueError):
+				if amount == "all":
+					uwallet = self.d.filedata[uid].get("wallet")
+					rwallet = self.d.filedata[rid].get("wallet")
+					self.d.filedata[uid].update({"wallet": uwallet - uwallet})
+					self.d.filedata[rid].update({"wallet": rwallet + uwallet})
+					await ctx.send(f"{ctx.author} gave {member.name} {amount} credits")
+					self.d.save()
+	
+	@commands.command(name = "grant")
+	async def grant(self, ctx, amount, target : twitchio.User):
+		invid = str(ctx.author.id)
+		if invid == "468972149":
+			tid = str(target.id)
+			print(tid)
+			if tid not in self.d.filedata:
+				self.d.add(tid)
+				self.d.save()
+				pass
+			wallet_target = self.d.filedata[tid].get("wallet")
+			self.d.filedata[tid].update({"wallet": wallet_target + int(amount)})
+			self.d.save()
+			await ctx.send(f"Granted {target.name} {amount} credits.")
 		else:
-			await ctx.send("Error! Not a number! Did the operator enjoy this witticism?")
+			await ctx.send("Dev only command.")
