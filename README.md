@@ -1,11 +1,11 @@
 # KianaKouhai
-- Kiana Kouhai is a work in progress bot for the Twitch streamer DrunlockHolmes. It can be used for other channels and I can even add anyone's channel to the initial channels if they'd like the original Kiana in their chat.
+- KianaKouhai is a bot created by yours truely for my brothers stream, to make it a little more fun with some extra functionality. Note, KianaKouhai is still a complete work in progress and is by no means close to finished.
 
 # Features
-- An economy based module for gaining points that the bot keeps track of.
+- Kiana currently features an economy system for gambling, robbing, giving, etc. made up points in chat. She keeps track by using and saving the economy data to wealth.json in the data folder. I have cleared it in case anyone want's to use the bot on their own. If you would like to see the original bot, stop by Drunklockholmes on Twitch when he's live and she'll be on.
 
 # Using
-- The bot itself is pretty standalone other than the use of the twitchio library. You can download it and run Kiana.py with your own tokens and it will boot up. Take heed to the fact that this is a work in progress! Features are missing and not all kinks are delt with yet!
+- The bot itself is standalone other than using the Twitchio 2 library and that will be required if you want to use the bot on your own.
 
 # Contributing
-- Anyone is welcome to contribute to the project, just make a pull request and I'll take a look. It's as simple as that.
+- Anyone is welcome to contribute to the project, just make a pull request and I'll take a look.
