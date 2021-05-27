@@ -13,7 +13,7 @@ class Economy(commands.Cog):
 		self.bot = bot
 		self.d = Database("library/data/wealth.json")
 	
-	@commands.command(name = "bal", aliases = ["Bal", "balance", "Balance"])
+	@commands.command(name = "bal", aliases = ["Bal"])
 	async def bal(self, ctx : commands.Context):
 		user_id = str(ctx.author.id)
 		if user_id not in self.d.filedata:
@@ -31,15 +31,17 @@ class Economy(commands.Cog):
 			pass
 		try:
 			amount = int(amount)
-			if self.d.filedata[user_id].get("wallet") >= amount:
-				wallet = self.d.filedata[user_id].get("wallet")
-				bank = self.d.filedata[user_id].get("bank")
-				self.d.filedata[user_id].update({"wallet": (wallet - amount)})
-				self.d.filedata[user_id].update({"bank": (bank + amount)})
-				await ctx.send(f"Successfully moved {amount} to your bank.")
-				self.d.save()
-			else:
-				await ctx.send("You do not have enough credits in your wallet.")
+			amount = Checks.NoNegative(amount)
+			if Checks.WalletCheck(amount) is True:
+				if self.d.filedata[user_id].get("wallet") >= amount:
+					wallet = self.d.filedata[user_id].get("wallet")
+					bank = self.d.filedata[user_id].get("bank")
+					self.d.filedata[user_id].update({"wallet": (wallet - amount)})
+					self.d.filedata[user_id].update({"bank": (bank + amount)})
+					await ctx.send(f"Successfully moved {amount} to your bank.")
+					self.d.save()
+				else:
+					await ctx.send("You do not have enough credits in your wallet.")
 		except Exception as E:
 			if isinstance(E, ValueError):
 				if amount == "all":
@@ -58,15 +60,17 @@ class Economy(commands.Cog):
 			pass
 		try:
 			amount = int(amount)
-			if self.d.filedata[user_id].get("bank") >= amount:
-				wallet = self.d.filedata[user_id].get("wallet")
-				bank = self.d.filedata[user_id].get("bank")
-				self.d.filedata[user_id].update({"wallet": (wallet + amount)})
-				self.d.filedata[user_id].update({"bank": (bank - amount)})
-				await ctx.send(f"Successfully moved {amount} to your wallet.")
-				self.d.save()
-			else:
-				await ctx.send("You do not have enough credits in your bank.")
+			amount = Checks.NoNegative(amount)
+			if Checks.BankCheck(amount) is True:
+				if self.d.filedata[user_id].get("bank") >= amount:
+					wallet = self.d.filedata[user_id].get("wallet")
+					bank = self.d.filedata[user_id].get("bank")
+					self.d.filedata[user_id].update({"wallet": (wallet + amount)})
+					self.d.filedata[user_id].update({"bank": (bank - amount)})
+					await ctx.send(f"Successfully moved {amount} to your wallet.")
+					self.d.save()
+				else:
+					await ctx.send("You do not have enough credits in your bank.")
 		except Exception as E:
 			if isinstance(E, ValueError):
 				if amount == "all":
@@ -87,6 +91,7 @@ class Economy(commands.Cog):
 			pass
 		try:
 			amount = int(amount)
+			amount = Checks.NoNegative(amount)
 			rint = random.randint(0,1)
 			if self.d.filedata[user_id].get("wallet") >= amount:
 				if rint == 1:
